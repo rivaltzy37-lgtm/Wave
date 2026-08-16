@@ -1,0 +1,28 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Growtopia Ban Rate Tracker Realtime</title>
+<style>
+body{margin:0;background:#080b12;color:#eef3fb;font:14px system-ui;padding:20px}main{max-width:1000px;margin:auto}
+.card{background:#111722;border:1px solid #202a39;border-radius:16px;padding:20px;margin-bottom:14px}
+h1{margin:0}.muted{color:#8995a8;font-size:12px}.rate{font-size:58px;font-weight:800;margin:12px 0}.live{color:#2ee67b}.alert{display:none;background:#391323;border:1px solid #ff4568;padding:18px;border-radius:16px;margin-bottom:14px}.alert.show{display:block;color:#ff6a84;font-weight:800}
+canvas{width:100%;height:300px}button{background:#182131;color:#fff;border:1px solid #263244;border-radius:9px;padding:10px;margin:4px;cursor:pointer}
+</style></head><body><main>
+<h1>🛡️ Growtopia Ban Rate Tracker</h1><p class="muted">Live API monitoring · 1 second polling · no alert cooldown</p>
+<div id="alert" class="alert">🚨 BANWAVE DETECTED<br><span id="meta"></span></div>
+<div class="card"><div class="muted">CURRENT BAN RATE</div><div id="rate" class="rate">--.--%</div><div id="change">Waiting...</div><div id="api" class="muted">Connecting...</div><div id="updated" class="muted"></div></div>
+<div class="card"><div class="muted">BAN RATE HISTORY</div><canvas id="chart"></canvas></div>
+<div class="card"><button id="notify">🔔 Enable notifications</button><button id="sound">🔊 Sound: ON</button><button id="clear">Clear history</button><div id="events" class="muted">No events yet.</div></div>
+</main>
+<script>
+const API="https://langsocks.duckdns.org/api/banrate", POLL=1000, vals=[], events=[];
+let previous=null,sound=true,ctx=null;
+const $=x=>document.getElementById(x), f=x=>Number(x).toFixed(2), tm=x=>new Date(x).toLocaleTimeString();
+function beep(){if(!sound)return;try{ctx??=new(window.AudioContext||window.webkitAudioContext)();let o=ctx.createOscillator(),g=ctx.createGain();o.frequency.value=760;g.gain.value=.05;o.connect(g);g.connect(ctx.destination);o.start();o.stop(ctx.currentTime+.25)}catch{}}
+function draw(){let c=$("chart"),r=c.getBoundingClientRect(),d=devicePixelRatio||1,w=r.width,h=300;c.width=w*d;c.height=h*d;let x=c.getContext("2d");x.scale(d,d);x.clearRect(0,0,w,h);if(vals.length<2)return;let mx=Math.max(1,...vals)*1.15,p=24;x.strokeStyle="#202a39";for(let i=0;i<5;i++){let y=p+(h-2*p)*i/4;x.beginPath();x.moveTo(p,y);x.lineTo(w-p,y);x.stroke()}x.beginPath();vals.forEach((v,i)=>{let X=p+(w-2*p)*i/(vals.length-1),Y=h-p-v/mx*(h-2*p);i?x.lineTo(X,Y):x.moveTo(X,Y)});x.strokeStyle="#6ea8ff";x.lineWidth=3;x.stroke()}
+function log(v,delta){events.unshift(`${tm(Date.now())} · 🚨 BANWAVE · ${f(v)}% · +${f(delta)}%`);events.splice(12);$("events").innerHTML=events.join("<br>")}
+async function poll(){try{let r=await fetch(API+"?t="+Date.now(),{cache:"no-store"});let d=await r.json(),v=Number(d.last_ban_rate);if(!Number.isFinite(v))throw Error("invalid data");let delta=previous===null?0:v-previous;previous=v;vals.push(v);if(vals.length>120)vals.shift();$("rate").textContent=f(v)+"%";$("change").textContent=delta?((delta>0?"↑ +":"↓ ")+f(delta)+"%"):"No change";$("api").textContent=d.ok&&d.live?"● API LIVE":"● API WARNING";$("api").className="muted live";$("updated").textContent="Updated "+tm(d.updated_at||Date.now());let wave=delta>=1||(v>=3&&delta>=.5);if(wave){$("alert").classList.add("show");$("meta").textContent=`${f(v-delta)}% → ${f(v)}% · +${f(delta)}% · ${tm(Date.now())}`;log(v,delta);beep();if(Notification.permission==="granted")new Notification("🚨 Banwave detected",{body:`Ban rate ${f(v)}% (+${f(delta)}%)`})}else if(v<.5)$("alert").classList.remove("show");draw()}catch(e){$("api").textContent="● API ERROR: "+e.message;$("api").className="muted"}}
+$("notify").onclick=async()=>{if("Notification"in window){let p=await Notification.requestPermission();$("notify").textContent=p==="granted"?"🔔 Notifications enabled":"🔕 Notifications blocked"}};
+$("sound").onclick=()=>{sound=!sound;$("sound").textContent=sound?"🔊 Sound: ON":"🔇 Sound: OFF"};
+$("clear").onclick=()=>{$("events").textContent="No events yet.";events.length=0};
+addEventListener("resize",draw);poll();setInterval(poll,POLL);
+</script></body></html>
